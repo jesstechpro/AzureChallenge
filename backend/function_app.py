@@ -58,13 +58,13 @@ def _ensure_counter_document() -> dict:
     return doc
 
 
-@app.route(route="counter", methods=["GET", "OPTIONS"], auth_level=func.AuthLevel.ANONYMOUS)
-def get_counter(req: func.HttpRequest) -> func.HttpResponse:
+@app.route(route="counter", methods=["GET", "POST", "OPTIONS"], auth_level=func.AuthLevel.ANONYMOUS)
+def counter(req: func.HttpRequest) -> func.HttpResponse:
     """
-    GET /api/counter
-    Returns the current visitor count stored in Cosmos DB.
+    GET /api/counter - Returns the current visitor count
+    POST /api/counter - Increments and returns the new visitor count
     """
-    logging.info("get_counter triggered")
+    logging.info(f"counter triggered with method: {req.method}")
     
     # Handle CORS preflight request
     if req.method == "OPTIONS":
@@ -81,60 +81,17 @@ def get_counter(req: func.HttpRequest) -> func.HttpResponse:
     try:
         container_client = _get_container_client()
         counter_doc = _ensure_counter_document()
-    except Exception as exc:  # pragma: no cover - safeguard logging
-        logging.exception("Failed to fetch counter.")
+        
+        # Increment counter for POST requests
+        if req.method == "POST":
+            counter_doc["count"] += 1
+            container_client.replace_item(item=COUNTER_ID, body=counter_doc)
+            
+    except Exception as exc:
+        action = "increment" if req.method == "POST" else "read"
+        logging.exception(f"Failed to {action} counter.")
         return func.HttpResponse(
-            json.dumps({"error": "Failed to read counter", "details": str(exc)}),
-            status_code=500,
-            mimetype="application/json",
-            headers={
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-                "Access-Control-Allow-Headers": "Content-Type, Accept"
-            }
-        )
-
-    return func.HttpResponse(
-        json.dumps({"count": counter_doc["count"]}),
-        mimetype="application/json",
-        status_code=200,
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type, Accept"
-        }
-    )
-
-
-@app.route(route="counter/increment", methods=["POST", "OPTIONS"], auth_level=func.AuthLevel.ANONYMOUS)
-def increment_counter(req: func.HttpRequest) -> func.HttpResponse:
-    """
-    POST /api/counter/increment
-    Increments the visitor count stored in Cosmos DB and returns the new value.
-    """
-    logging.info("increment_counter triggered")
-    
-    # Handle CORS preflight request
-    if req.method == "OPTIONS":
-        return func.HttpResponse(
-            "",
-            status_code=200,
-            headers={
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-                "Access-Control-Allow-Headers": "Content-Type, Accept"
-            }
-        )
-    
-    try:
-        container_client = _get_container_client()
-        counter_doc = _ensure_counter_document()
-        counter_doc["count"] += 1
-        container_client.replace_item(item=COUNTER_ID, body=counter_doc)
-    except Exception as exc:  # pragma: no cover - safeguard logging
-        logging.exception("Failed to increment counter.")
-        return func.HttpResponse(
-            json.dumps({"error": "Failed to increment counter", "details": str(exc)}),
+            json.dumps({"error": f"Failed to {action} counter", "details": str(exc)}),
             status_code=500,
             mimetype="application/json",
             headers={
