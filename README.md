@@ -4,7 +4,7 @@ A modern, serverless resume website built on Azure, featuring a real-time visito
 
 ## 🌐 Live Demo
 
-**[View Live Site →](https://azurefrontend.z13.web.core.windows.net/)**
+**https://azurefrontend.z13.web.core.windows.net/**
 
 ## 🏗️ Architecture
 
